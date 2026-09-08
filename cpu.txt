@@ -1,0 +1,223 @@
+CPU 1.0 — Especificação Técnica Completa e Definitiva
+
+Nome: JASCO-1
+Versão: 1.0 (Finalizada)
+Data: 07 de Setembro de 2026
+Autor: LINS
+Status: Pronta para Simulação Teórica e Projeto de Circuitos
+
+---
+
+1. Objetivo e Filosofia do Projeto
+
+A CPU 1.0 é um projeto de computador construído integralmente com componentes eletrônicos discretos (transistores, resistores, diodos e capacitores), sem o uso de circuitos integrados para a lógica principal de processamento.
+
+Filosofia: A simplicidade e a compreensibilidade física são prioridades máximas. Soluções que permitam visualizar o funcionamento (através de LEDs) e modificar o circuito com facilidade são preferidas em detrimento da máxima eficiência energética ou velocidade.
+
+A arquitetura não busca replicar designs modernos, mas sim criar uma identidade própria, onde o fluxo da eletricidade possa ser acompanhado visualmente do bit até a instrução.
+
+---
+
+2. Características Fundamentais (O "DNA" da Máquina)
+
+· Largura de Dados: 8 bits (valores de 0 a 255).
+· Barramento: Único barramento de dados de 8 bits para comunicação entre memória, registradores e ALU.
+· Distinção Instrução x Dado: Utiliza o Bit 7 (MSB) como flag:
+  · Bit 7 = 0 → O byte é um Número (Dado) (faixa de 0 a 127).
+  · Bit 7 = 1 → O byte é uma Instrução (faixa de 128 a 255).
+· ALU: Unidade de 8 bits capaz de realizar Soma e Subtração.
+· Overflow (Estouro): Resultados de soma podem gerar um 9º bit (Carry). Este bit é armazenado em um Flip-Flop de Status (Carry) para visualização. Os 8 bits inferiores do resultado retornam para o processamento (truncamento), e o 9º bit não participa das operações seguintes.
+· Memória: Construída com flip-flops D discretos, organizada em posições de 8 bits, expansível por módulos físicos (Slots).
+· Controle de Fluxo: Contador em Anel (não binário), onde apenas 1 estágio fica ativo por vez, definindo o endereço atual da memória.
+· Clock: Ajustável (0,5 Hz a ~5 kHz), gerado por um CI 555, com chave para modo manual (passo a passo).
+
+---
+
+3. Memória e Organização Interna
+
+3.1 Estrutura Física
+
+· Módulo Base: 8 endereços (Estágios 0 a 7) x 8 bits = 64 bits (8 bytes).
+· Tecnologia: Flip-flops D feitos com transistores 2N3904.
+· Organização Lógica (Alternância):
+  · Endereços Pares (0, 2, 4, 6...) → Armazenam Instruções.
+  · Endereços Ímpares (1, 3, 5, 7...) → Armazenam Dados (Números).
+· Expansão (Slots): Ao conectar um módulo extra, o circuito insere mais estágios no anel (ex: FF8 a FF15). Um transistor de chaveamento corta a realimentação do FF7 para o FF0 e a redireciona para o novo módulo, estendendo a memória sem alterar a lógica base.
+
+3.2 Mecanismo de Endereçamento
+
+O contador em anel é o endereço. Não há decodificador de endereço binário. O estágio ativo do anel (FF0, FF1, FF2...) habilita diretamente a saída da posição de memória correspondente. Isso torna o hardware extremamente simples e visual (cada LED do anel indica qual instrução/dado está sendo lido).
+
+---
+
+4. Contador em Anel (Program Counter - PC)
+
+O PC é um registrador de deslocamento com realimentação (Shift Register).
+
+· Funcionamento: Um único "1" lógico caminha pelos estágios a cada pulso de clock: FF0 → FF1 → FF2 → ... → FF7.
+· Loop: Ao atingir o último estágio disponível (FF7 no módulo base), o sinal retorna para o FF0, a menos que a instrução STOP intervenha.
+· Reset (STOP): Quando a instrução 11111111 (STOP) é decodificada, ela força o PRESET (Set) do FF0 e o CLEAR (Reset) de todos os outros FFs (FF1 a FF7). Isso reinicia o programa imediatamente do começo (Endereço 0).
+
+---
+
+5. Conjunto de Instruções (ISA)
+
+A CPU utiliza os seguintes códigos de operação (OPCODES). Todos os códigos possuem o Bit 7 = 1 para serem reconhecidos como instruções:
+
+Nome Binário (8 bits) Hexadecimal Ação Detalhada
+NOP 10000000 0x80 No Operation. Aguarda o próximo ciclo (útil para delays).
+LDA 10000001 0x81 Load A. Acumulador = valor do próximo endereço (ímpar).
+ADD 10000010 0x82 Add. Acumulador = Acumulador + valor do próximo endereço.
+SUB 10000011 0x83 Subtract. Acumulador = Acumulador - valor do próximo endereço.
+STOP 11111111 0xFF Stop / Reset. Interrompe a execução e reseta o Anel para FF0.
+
+(Nota: Os códigos 0x84 a 0xFE estão reservados para expansões futuras, como AND, OR, JUMP, etc.)
+
+---
+
+6. Decodificador (Lógica de Controle)
+
+O decodificador é feito inteiramente com portas AND e NOT (transistores). Ele traduz o byte armazenado no Registrador de Instrução (IR):
+
+1. Detector de Número (Bit 7 = 0): Se o Bit 7 chegar ao IR em 0, um inversor (NOT) ativa a linha DADO_VALIDO, informando à ALU que deve usar esse byte como operando.
+2. Detector de Instrução (Bit 7 = 1): O Bit 7 aciona a linha INSTRUCAO_VALIDA.
+   · Se os bits 0 e 1 estiverem em 1 (...0000010), um AND de 2 entradas ativa o comando ADD.
+   · Se os bits 0 e 2 estiverem em 1 (...0000011), ativa o comando SUB.
+   · Se todos os 8 bits forem 1 (11111111), um AND de 8 entradas ativa o RESET_DO_ANEL.
+
+---
+
+7. Registradores e ALU (Unidade Lógica Aritmética)
+
+· Registrador A (Acumulador): 8 bits. Armazena o primeiro operando e recebe o resultado (truncado) de cada operação.
+· Registrador B (Operando): 8 bits. Armazena o valor vindo da memória (endereços ímpares) para ser o segundo operando da ALU.
+· ALU: Construída com somadores completos (Full Adders) de 1 bit usando transistores, encadeados para formar 8 bits. Realiza Soma e Subtração (a subtração é feita via complemento de 2).
+· Registrador de Resultado: 8 bits, guarda a saída da ALU.
+· Flag de Carry (Overflow): Um flip-flop extra (9º bit) é ativado quando a soma ultrapassa 255. Este bit é somente para visualização (LED de "Estouro") e não é realimentado para o Registrador A, garantindo que a lógica de 8 bits permaneça pura.
+
+---
+
+8. Clock e Modos de Operação
+
+8.1 Gerador de Clock
+
+· CI 555 no modo astável.
+· Frequência: Ajustável de 0,5 Hz (modo lento/didático) até ~5 kHz (limite experimental da protoboard).
+· Chave Seletora de Velocidade: 4 capacitores diferentes (100µF, 10µF, 1µF, 0.01µF) ligados a um seletor rotativo para trocar a faixa de velocidade instantaneamente.
+
+8.2 Modo PROG (Programação Manual)
+
+· Chave Seletora (SPDT): Posição "PROG".
+· O clock do Anel é desconectado do 555 e conectado ao Push Button.
+· Fluxo: Levantar as 8 chaves DIP → Apertar o Botão → O pulso grava o byte na memória E avança o Anel para o próximo endereço.
+· Repetir até preencher o programa.
+
+8.3 Modo RUN (Execução Automática)
+
+· Chave Seletora: Posição "RUN".
+· O clock do Anel é conectado ao CI 555.
+· O computador executa o programa gravado na velocidade escolhida, rodando em loop até encontrar o STOP (que reseta o anel).
+
+---
+
+9. Fluxo Geral de Execução (Ciclo da Máquina)
+
+Cada instrução (como ADD ou SUB) consome exatamente 2 pulsos de clock:
+
+· Pulso 1 (Endereço Par): O Anel aponta para a posição Par. A memória coloca a instrução (ex: 10000010 - ADD) no barramento. O IR carrega e o Decodificador ativa a ALU para "Soma".
+· Pulso 2 (Endereço Ímpar): O Anel avança para o Ímpar. A memória coloca o número (ex: 00000101 - 5) no barramento. O Registrador B carrega. A ALU soma A + B. O resultado vai para o Acumulador (A).
+
+Exemplo prático (10 + 20 - 5):
+
+1. End 0 (LDA) → End 1 (10) → A=10
+2. End 2 (ADD) → End 3 (20) → A=30
+3. End 4 (SUB) → End 5 (5) → A=25
+4. End 6 (STOP) → Anel reseta para FF0 → Recomeça.
+
+---
+
+10. Painel de Controle e Interface Visual
+
+· 8 Chaves DIP: Para levantar os bits no modo PROG.
+· Push Button: Gravação e avanço do anel.
+· Chave PROG/RUN: Segrega a fonte de clock.
+· LEDs de Estado:
+  · 8 LEDs mostrando o estado atual do Anel (qual endereço está ativo).
+  · 8 LEDs mostrando o Barramento de Dados.
+  · 8 LEDs mostrando o conteúdo do Acumulador.
+  · 1 LED de CARRY (9º bit) para indicar estouro.
+  · 1 LED de STOP para indicar que o reset foi acionado.
+
+---
+
+11. Modularidade Física e Expansões Futuras
+
+O projeto é dividido em módulos físicos para facilitar testes e manutenção:
+
+1. Módulo Clock + Painel PROG/RUN.
+2. Módulo Contador em Anel (base + slots).
+3. Módulo Memória (8 bytes + slots de expansão).
+4. Módulo Registrador A / B.
+5. Módulo ALU (Soma/Sub).
+6. Módulo Decodificador (Controle).
+7. Módulo de Saída (Displays 7 segmentos ou Matriz de LEDs).
+
+Expansões previstas (Futuro):
+
+· Adição de instruções lógicas (AND, OR, XOR).
+· Implementação de JUMP condicional.
+· Conversão da saída para Display de 7 segmentos (via ROM de diodos).
+· Aumento da largura para 16 bits (mantendo a filosofia do anel).
+
+---
+
+12. Decisões Técnicas Finais (Resumo do Projeto)
+
+Para responder oficialmente à Seção 22 do rascunho inicial, todas as questões foram resolvidas da seguinte forma:
+
+Questão Decisão Tomada
+1. Tamanho da memória inicial 8 bytes (módulo base, expansível por slots).
+2. Seleção de memória Direta: Estágio do Anel habilita a posição correspondente.
+3. Detecção do Slot Transistor PNP corta o loop FF7→FF0 quando o slot é encaixado.
+4. Retorno do Anel Último FF do último slot conectado à entrada de dados do FF0.
+5. Códigos de Soma/Sub 0x82 (ADD) e 0x83 (SUB).
+6. Diferenciação Instrução/Dado Bit 7 (MSB): 0 = Dado, 1 = Instrução.
+7. Ciclos por operação 2 pulsos de clock (1 p/ Instrução, 1 p/ Dado).
+8. Resultado de 9 bits 8 bits inferiores retornam ao A; 9º bit vai para o LED de Carry.
+9. Overflow (>255) Truncamento (A recebe apenas os 8 bits). Carry fica apenas no LED.
+10. Transição PROG/RUN Chave SPDT (PROG = Botão; RUN = 555).
+11. Comportamento do STOP Reset do Anel (FF0=1, FF1~7=0). A execução recomeça.
+12. Registradores físicos Flip-flops D com transistores 2N3904 e resistores de carga.
+13. ALU com transistores Somadores completos de 1 bit com portas XOR/AND discretas.
+14. Distribuição do Clock Clock global distribuído para todos os FFs, com buffer transistorizado.
+15. Atrasos e temporização Clocks lentos (<5kHz) garantem estabilidade; frequência máxima será testada empiricamente.
+
+---
+
+13. Meta de Validação (Primeiro Programa)
+
+O primeiro programa funcional a ser carregado na CPU 1.0 será:
+
+Cálculo: 10 + 20 - 5 = 25
+
+Código na Memória:
+
+End. Valor Descrição
+0 10000001 (LDA) Carrega 10
+1 00001010 (10) Dado
+2 10000010 (ADD) Soma 20
+3 00010100 (20) Dado
+4 10000011 (SUB) Subtrai 5
+5 00000101 (5) Dado
+6 11111111 (STOP) Reseta o Anel
+7 00000000 (Lixo)
+
+Resultado Esperado: Ao ligar em RUN, os LEDs do Acumulador devem mostrar 00011001 (25) e o anel deve resetar infinitamente, executando o programa em loop.
+
+---
+
+14. Próximos Passos (Roteiro de Ação)
+
+1. Teórico (Agora): Desenhar o Diagrama de Blocos completo no papel, validando as conexões entre Anel, Memória, Decodificador e ALU com base nesta especificação.
+2. Simulação (Opcional): Transportar o diagrama para o Logisim apenas para testar o fluxo de dados e confirmar os tempos de 2 ciclos por instrução.
+3. Protótipo (Futuro): Construir e testar o primeiro estágio do Anel (1 FF) com transistores, depois expandir para 8, e então adicionar a memória byte a byte.
