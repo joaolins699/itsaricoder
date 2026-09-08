@@ -1,0 +1,1254 @@
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>JASCO-1 Assembler</title>
+
+<style>
+
+body {
+    background: #111;
+    color: #eee;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 25px;
+}
+
+.container {
+    max-width: 1100px;
+    margin: auto;
+}
+
+h1 {
+    margin-top: 0;
+}
+
+.panel {
+    background: #1b1b1b;
+    border: 1px solid #444;
+    padding: 18px;
+    margin-bottom: 18px;
+}
+
+textarea {
+    width: 100%;
+    height: 220px;
+    box-sizing: border-box;
+
+    background: #050505;
+    color: #7CFC00;
+
+    border: 1px solid #555;
+    padding: 12px;
+
+    font-family: monospace;
+    font-size: 16px;
+
+    resize: vertical;
+}
+
+button {
+    padding: 10px 15px;
+    margin: 8px 5px 5px 0;
+
+    background: #ddd;
+    color: #111;
+
+    border: none;
+    cursor: pointer;
+
+    font-weight: bold;
+}
+
+button:hover {
+    background: #fff;
+}
+
+pre {
+    background: #050505;
+    padding: 14px;
+
+    overflow-x: auto;
+
+    font-family: monospace;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+
+    font-family: monospace;
+}
+
+th,
+td {
+    border: 1px solid #444;
+    padding: 9px;
+    text-align: left;
+}
+
+th {
+    background: #222;
+}
+
+.instruction {
+    font-weight: bold;
+}
+
+.data {
+    padding-left: 35px;
+}
+
+.error {
+    color: #ff5555;
+}
+
+.success {
+    color: #7CFC00;
+}
+
+.small {
+    color: #aaa;
+    font-size: 14px;
+}
+
+#audioArea {
+    margin-top: 15px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>JASCO-1 — Assembler</h1>
+
+<p class="small">
+Assembler experimental para a CPU JASCO-1.
+</p>
+
+
+<!-- PROGRAMA -->
+
+<div class="panel">
+
+<h2>Programa</h2>
+
+<textarea id="source">LDA 10
+ADD 20
+SUB 5
+STOP</textarea>
+
+<br>
+
+<button onclick="assemble()">
+Montar programa
+</button>
+
+<button onclick="example()">
+Exemplo 10 + 20 - 5
+</button>
+
+<button onclick="clearAll()">
+Limpar
+</button>
+
+<div id="status"></div>
+
+</div>
+
+
+<!-- MEMÓRIA -->
+
+<div class="panel">
+
+<h2>Memória da JASCO-1</h2>
+
+<table>
+
+<thead>
+
+<tr>
+<th>End.</th>
+<th>Binário</th>
+<th>Hex</th>
+<th>Conteúdo</th>
+</tr>
+
+</thead>
+
+<tbody id="memoryTable">
+
+</tbody>
+
+</table>
+
+</div>
+
+
+<!-- BINÁRIO -->
+
+<div class="panel">
+
+<h2>Programa em binário</h2>
+
+<pre id="binary">
+Ainda não montado.
+</pre>
+
+<p>
+<b>Bytes utilizados:</b>
+
+<span id="byteCount">
+0
+</span>
+
+/
+8
+
+</p>
+
+</div>
+
+
+<!-- ÁUDIO -->
+
+<div class="panel">
+
+<h2>Gerador de áudio para K7</h2>
+
+<p class="small">
+
+Protótipo do sistema de carregamento por fita.
+
+<br>
+
+BIT 0 = 1200 Hz
+
+<br>
+
+BIT 1 = 2400 Hz
+
+<br>
+
+Cada bit possui duração configurável.
+
+</p>
+
+
+<label>
+
+Duração de cada bit (ms):
+
+<input
+id="bitMs"
+type="number"
+value="100"
+min="10"
+max="1000"
+step="10">
+
+</label>
+
+
+<br>
+
+
+<button onclick="generateWav()">
+Gerar WAV
+</button>
+
+
+<button onclick="playAudio()">
+▶ Reproduzir
+</button>
+
+
+<a
+id="download"
+style="display:none; margin-left:10px">
+
+Baixar WAV
+
+</a>
+
+
+<div id="audioArea"></div>
+
+</div>
+
+
+<!-- FORMATO FUTURO -->
+
+<div class="panel">
+
+<h2>Formato da fita</h2>
+
+<pre>
+SYNC
+
+HEADER
+
+TAMANHO DO PROGRAMA
+
+DADOS
+
+CHECKSUM
+
+END
+</pre>
+
+<p class="small">
+
+O protocolo acima ainda é experimental.
+Ele poderá ser definido posteriormente para o hardware real.
+
+</p>
+
+</div>
+
+
+</div>
+
+
+<script>
+
+
+/* =====================================================
+   OPCODES DA JASCO-1
+===================================================== */
+
+const OPCODES = {
+
+    NOP: 0x80,
+
+    LDA: 0x81,
+
+    ADD: 0x82,
+
+    SUB: 0x83,
+
+    STOP: 0xFF
+
+};
+
+
+let programBytes = [];
+
+let audioURL = null;
+
+
+/* =====================================================
+   CONVERSÃO PARA BINÁRIO
+===================================================== */
+
+function byteBin(value) {
+
+    return value
+        .toString(2)
+        .padStart(8, "0");
+
+}
+
+
+/* =====================================================
+   CONVERSÃO DE NÚMERO
+===================================================== */
+
+function parseNumber(text) {
+
+    if (/^0x[0-9a-f]+$/i.test(text)) {
+
+        return parseInt(text, 16);
+
+    }
+
+
+    if (/^0b[01]+$/i.test(text)) {
+
+        return parseInt(text.substring(2), 2);
+
+    }
+
+
+    if (/^\d+$/.test(text)) {
+
+        return parseInt(text, 10);
+
+    }
+
+
+    return NaN;
+
+}
+
+
+/* =====================================================
+   MONTADOR
+===================================================== */
+
+function assemble() {
+
+    const source =
+        document.getElementById("source").value;
+
+
+    const lines =
+        source.split(/\r?\n/);
+
+
+    const bytes = [];
+
+    const errors = [];
+
+
+    lines.forEach((rawLine, index) => {
+
+        let line =
+            rawLine
+            .split(";")[0]
+            .trim();
+
+
+        if (!line) return;
+
+
+        const parts =
+            line
+            .replace(/,/g, " ")
+            .split(/\s+/);
+
+
+        const operation =
+            parts[0].toUpperCase();
+
+
+        /* ------------------------------------------
+           INSTRUÇÃO EXISTE?
+        ------------------------------------------ */
+
+        if (!(operation in OPCODES)) {
+
+            errors.push(
+                `Linha ${index + 1}: instrução desconhecida "${operation}"`
+            );
+
+            return;
+
+        }
+
+
+        /* ------------------------------------------
+           STOP / NOP
+        ------------------------------------------ */
+
+        if (
+            operation === "STOP" ||
+            operation === "NOP"
+        ) {
+
+            if (parts.length !== 1) {
+
+                errors.push(
+                    `Linha ${index + 1}: ${operation} não recebe argumento`
+                );
+
+                return;
+
+            }
+
+
+            bytes.push(
+                OPCODES[operation]
+            );
+
+            return;
+
+        }
+
+
+        /* ------------------------------------------
+           INSTRUÇÕES COM OPERANDO
+        ------------------------------------------ */
+
+        if (parts.length !== 2) {
+
+            errors.push(
+                `Linha ${index + 1}: ${operation} precisa de um valor`
+            );
+
+            return;
+
+        }
+
+
+        const number =
+            parseNumber(parts[1]);
+
+
+        /* ------------------------------------------
+           DADOS DA JASCO SÃO 0-127
+        ------------------------------------------ */
+
+        if (
+            !Number.isInteger(number) ||
+            number < 0 ||
+            number > 127
+        ) {
+
+            errors.push(
+                `Linha ${index + 1}: o dado deve estar entre 0 e 127`
+            );
+
+            return;
+
+        }
+
+
+        /* ------------------------------------------
+           INSTRUÇÃO + DADO
+        ------------------------------------------ */
+
+        bytes.push(
+            OPCODES[operation]
+        );
+
+
+        bytes.push(
+            number
+        );
+
+    });
+
+
+    programBytes = bytes;
+
+
+    /* =================================================
+       STATUS
+    ================================================= */
+
+    if (errors.length > 0) {
+
+        document.getElementById("status").innerHTML =
+
+            `<p class="error">
+            ${errors.join("<br>")}
+            </p>`;
+
+    }
+
+    else {
+
+        document.getElementById("status").innerHTML =
+
+            `<p class="success">
+            Programa montado com sucesso.
+            </p>`;
+
+    }
+
+
+    /* =================================================
+       ATUALIZA MEMÓRIA
+    ================================================= */
+
+    updateMemory();
+
+
+}
+
+
+/* =====================================================
+   MOSTRAR MEMÓRIA
+===================================================== */
+
+function updateMemory() {
+
+    const table =
+        document.getElementById("memoryTable");
+
+
+    table.innerHTML = "";
+
+
+    for (
+        let address = 0;
+        address < 8;
+        address++
+    ) {
+
+
+        const row =
+            document.createElement("tr");
+
+
+        /* ------------------------------------------
+           ENDEREÇO
+        ------------------------------------------ */
+
+        const addressCell =
+            document.createElement("td");
+
+
+        addressCell.textContent =
+            address;
+
+
+        row.appendChild(addressCell);
+
+
+        /* ------------------------------------------
+           BYTE
+        ------------------------------------------ */
+
+        const binaryCell =
+            document.createElement("td");
+
+
+        const hexCell =
+            document.createElement("td");
+
+
+        const contentCell =
+            document.createElement("td");
+
+
+        if (address < programBytes.length) {
+
+
+            const value =
+                programBytes[address];
+
+
+            binaryCell.textContent =
+                byteBin(value);
+
+
+            hexCell.textContent =
+                "0x" +
+                value
+                .toString(16)
+                .toUpperCase()
+                .padStart(2, "0");
+
+
+            /* --------------------------------------
+               IDENTIFICAR INSTRUÇÃO
+            -------------------------------------- */
+
+            let instruction = null;
+
+
+            for (const name in OPCODES) {
+
+                if (
+                    OPCODES[name] === value
+                ) {
+
+                    instruction = name;
+
+                    break;
+
+                }
+
+            }
+
+
+            if (instruction) {
+
+                contentCell.textContent =
+                    instruction;
+
+                contentCell.className =
+                    "instruction";
+
+            }
+
+            else {
+
+                contentCell.textContent =
+                    value;
+
+                contentCell.className =
+                    "data";
+
+            }
+
+
+        }
+
+        else {
+
+
+            binaryCell.textContent =
+                "--------";
+
+
+            hexCell.textContent =
+                "----";
+
+
+            contentCell.textContent =
+                "vazio";
+
+
+        }
+
+
+        row.appendChild(binaryCell);
+
+        row.appendChild(hexCell);
+
+        row.appendChild(contentCell);
+
+
+        table.appendChild(row);
+
+    }
+
+
+    /* =================================================
+       BINÁRIO COMPLETO
+    ================================================= */
+
+    if (programBytes.length > 0) {
+
+        document.getElementById("binary")
+            .textContent =
+
+            programBytes
+            .map(byteBin)
+            .join(" ");
+
+    }
+
+    else {
+
+        document.getElementById("binary")
+            .textContent =
+            "Ainda não há bytes.";
+
+    }
+
+
+    document.getElementById("byteCount")
+        .textContent =
+        programBytes.length;
+
+}
+
+
+/* =====================================================
+   EXEMPLO
+===================================================== */
+
+function example() {
+
+    document.getElementById("source").value =
+
+`LDA 10
+ADD 20
+SUB 5
+STOP`;
+
+
+    assemble();
+
+}
+
+
+/* =====================================================
+   LIMPAR
+===================================================== */
+
+function clearAll() {
+
+    document.getElementById("source").value = "";
+
+    programBytes = [];
+
+
+    document.getElementById("status")
+        .innerHTML = "";
+
+
+    updateMemory();
+
+}
+
+
+/* =====================================================
+   GERADOR DE WAV
+===================================================== */
+
+function makeWav(
+    samples,
+    sampleRate
+) {
+
+    const buffer =
+        new ArrayBuffer(
+            44 +
+            samples.length * 2
+        );
+
+
+    const view =
+        new DataView(buffer);
+
+
+    function writeString(
+        offset,
+        string
+    ) {
+
+        for (
+            let i = 0;
+            i < string.length;
+            i++
+        ) {
+
+            view.setUint8(
+                offset + i,
+                string.charCodeAt(i)
+            );
+
+        }
+
+    }
+
+
+    writeString(
+        0,
+        "RIFF"
+    );
+
+
+    view.setUint32(
+        4,
+        36 + samples.length * 2,
+        true
+    );
+
+
+    writeString(
+        8,
+        "WAVE"
+    );
+
+
+    writeString(
+        12,
+        "fmt "
+    );
+
+
+    view.setUint32(
+        16,
+        16,
+        true
+    );
+
+
+    view.setUint16(
+        20,
+        1,
+        true
+    );
+
+
+    view.setUint16(
+        22,
+        1,
+        true
+    );
+
+
+    view.setUint32(
+        24,
+        sampleRate,
+        true
+    );
+
+
+    view.setUint32(
+        28,
+        sampleRate * 2,
+        true
+    );
+
+
+    view.setUint16(
+        32,
+        2,
+        true
+    );
+
+
+    view.setUint16(
+        34,
+        16,
+        true
+    );
+
+
+    writeString(
+        36,
+        "data"
+    );
+
+
+    view.setUint32(
+        40,
+        samples.length * 2,
+        true
+    );
+
+
+    let position = 44;
+
+
+    for (const sample of samples) {
+
+        view.setInt16(
+            position,
+            Math.max(
+                -32768,
+                Math.min(
+                    32767,
+                    sample
+                )
+            ),
+            true
+        );
+
+
+        position += 2;
+
+    }
+
+
+    return new Blob(
+        [buffer],
+        {
+            type: "audio/wav"
+        }
+    );
+
+}
+
+
+/* =====================================================
+   GERAR ÁUDIO
+===================================================== */
+
+function buildAudio() {
+
+    if (
+        programBytes.length === 0
+    ) {
+
+        assemble();
+
+    }
+
+
+    if (
+        programBytes.length === 0
+    ) {
+
+        return null;
+
+    }
+
+
+    const bitMs =
+        Math.max(
+            10,
+            Number(
+                document.getElementById("bitMs").value
+            ) || 100
+        );
+
+
+    const sampleRate =
+        44100;
+
+
+    const frequency0 =
+        1200;
+
+
+    const frequency1 =
+        2400;
+
+
+    const amplitude =
+        0.55;
+
+
+    const samples = [];
+
+
+    /* ------------------------------------------
+       PREÂMBULO
+
+       10101010101010101010
+    ------------------------------------------ */
+
+    const bits = [];
+
+
+    for (
+        let i = 0;
+        i < 20;
+        i++
+    ) {
+
+        bits.push(
+            i % 2
+        );
+
+    }
+
+
+    /* ------------------------------------------
+       TRANSFORMAR BYTES EM BITS
+    ------------------------------------------ */
+
+    for (
+        const byte of programBytes
+    ) {
+
+        for (
+            let bit = 7;
+            bit >= 0;
+            bit--
+        ) {
+
+            bits.push(
+                (byte >> bit) & 1
+            );
+
+        }
+
+    }
+
+
+    /* ------------------------------------------
+       GERAR ONDA
+    ------------------------------------------ */
+
+    for (
+        const bit of bits
+    ) {
+
+
+        const frequency =
+            bit
+            ? frequency1
+            : frequency0;
+
+
+        const numberOfSamples =
+            Math.round(
+                sampleRate *
+                bitMs /
+                1000
+            );
+
+
+        for (
+            let i = 0;
+            i < numberOfSamples;
+            i++
+        ) {
+
+
+            const time =
+                i / sampleRate;
+
+
+            /* ----------------------------------
+               ENVELOPE PARA EVITAR ESTALOS
+            ---------------------------------- */
+
+            let envelope = 1;
+
+
+            const edge =
+                Math.min(
+                    300,
+                    Math.floor(
+                        numberOfSamples / 8
+                    )
+                );
+
+
+            if (
+                i < edge
+            ) {
+
+                envelope =
+                    i / edge;
+
+            }
+
+
+            if (
+                i >
+                numberOfSamples - edge
+            ) {
+
+                envelope =
+                    (
+                        numberOfSamples - i
+                    ) / edge;
+
+            }
+
+
+            const sample =
+
+                32767 *
+                amplitude *
+                envelope *
+                Math.sin(
+                    2 *
+                    Math.PI *
+                    frequency *
+                    time
+                );
+
+
+            samples.push(sample);
+
+        }
+
+    }
+
+
+    return makeWav(
+        samples,
+        sampleRate
+    );
+
+}
+
+
+/* =====================================================
+   GERAR WAV
+===================================================== */
+
+function generateWav() {
+
+    const blob =
+        buildAudio();
+
+
+    if (!blob) {
+
+        return;
+
+    }
+
+
+    if (audioURL) {
+
+        URL.revokeObjectURL(
+            audioURL
+        );
+
+    }
+
+
+    audioURL =
+        URL.createObjectURL(
+            blob
+        );
+
+
+    const download =
+        document.getElementById(
+            "download"
+        );
+
+
+    download.href =
+        audioURL;
+
+
+    download.download =
+        "jasco_programa.wav";
+
+
+    download.textContent =
+        "💾 Baixar jasco_programa.wav";
+
+
+    download.style.display =
+        "inline-block";
+
+
+    document.getElementById(
+        "audioArea"
+    ).innerHTML =
+
+        `<audio controls src="${audioURL}"></audio>`;
+
+
+    document.getElementById(
+        "status"
+    ).innerHTML =
+
+        `<p class="success">
+        WAV gerado com sucesso.
+        </p>`;
+
+}
+
+
+/* =====================================================
+   REPRODUZIR
+===================================================== */
+
+function playAudio() {
+
+    if (!audioURL) {
+
+        generateWav();
+
+    }
+
+
+    if (audioURL) {
+
+        const audio =
+            new Audio(audioURL);
+
+
+        audio.play();
+
+    }
+
+}
+
+
+/* =====================================================
+   INICIAR
+===================================================== */
+
+assemble();
+
+
+</script>
+
+</body>
+</html>
+```
