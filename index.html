@@ -1,1254 +1,304 @@
-```html
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>JASCO-1 Assembler</title>
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JASCO-1 Development Environment</title>
 <style>
-
-body {
-    background: #111;
-    color: #eee;
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 25px;
-}
-
-.container {
-    max-width: 1100px;
-    margin: auto;
-}
-
-h1 {
-    margin-top: 0;
-}
-
-.panel {
-    background: #1b1b1b;
-    border: 1px solid #444;
-    padding: 18px;
-    margin-bottom: 18px;
-}
-
-textarea {
-    width: 100%;
-    height: 220px;
-    box-sizing: border-box;
-
-    background: #050505;
-    color: #7CFC00;
-
-    border: 1px solid #555;
-    padding: 12px;
-
-    font-family: monospace;
-    font-size: 16px;
-
-    resize: vertical;
-}
-
-button {
-    padding: 10px 15px;
-    margin: 8px 5px 5px 0;
-
-    background: #ddd;
-    color: #111;
-
-    border: none;
-    cursor: pointer;
-
-    font-weight: bold;
-}
-
-button:hover {
-    background: #fff;
-}
-
-pre {
-    background: #050505;
-    padding: 14px;
-
-    overflow-x: auto;
-
-    font-family: monospace;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-
-    font-family: monospace;
-}
-
-th,
-td {
-    border: 1px solid #444;
-    padding: 9px;
-    text-align: left;
-}
-
-th {
-    background: #222;
-}
-
-.instruction {
-    font-weight: bold;
-}
-
-.data {
-    padding-left: 35px;
-}
-
-.error {
-    color: #ff5555;
-}
-
-.success {
-    color: #7CFC00;
-}
-
-.small {
-    color: #aaa;
-    font-size: 14px;
-}
-
-#audioArea {
-    margin-top: 15px;
-}
-
+*{box-sizing:border-box}
+body{margin:0;background:#111;color:#eee;font-family:Arial,sans-serif}
+header{background:#1b1b1b;border-bottom:2px solid #555;padding:18px 24px}
+h1{margin:0;font-family:monospace;letter-spacing:2px}
+header p{margin:6px 0 0;color:#aaa}
+main{max-width:1200px;margin:auto;padding:20px}
+.panel{background:#1b1b1b;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px}
+label{font-weight:bold}
+select,textarea,button,input{font:inherit}
+select{background:#222;color:#fff;border:1px solid #666;padding:9px;border-radius:5px}
+textarea{width:100%;min-height:190px;background:#090909;color:#ddd;border:1px solid #555;border-radius:6px;padding:14px;font-family:monospace;font-size:15px;resize:vertical}
+button{background:#333;color:#fff;border:1px solid #777;border-radius:5px;padding:10px 16px;cursor:pointer;margin:6px 4px 0 0}
+button:hover{background:#444}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+pre{background:#090909;border:1px solid #444;padding:14px;border-radius:6px;overflow:auto;font-family:monospace}
+table{width:100%;border-collapse:collapse;font-family:monospace}
+th,td{border:1px solid #444;padding:7px;text-align:center}
+th{background:#252525}
+.instr{font-weight:bold}
+.muted{color:#888}
+.status{font-family:monospace;color:#aaa}
+.error{color:#ff8b8b}
+.ok{color:#9cff9c}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
-
 <body>
+<header>
+<h1>JASCO-1 DEVELOPMENT ENVIRONMENT</h1>
+<p>Assembler • C • Binário • ITSARI → ISA JASCO-1 → WAV / K7</p>
+</header>
 
-<div class="container">
-
-<h1>JASCO-1 — Assembler</h1>
-
-<p class="small">
-Assembler experimental para a CPU JASCO-1.
-</p>
-
-
-<!-- PROGRAMA -->
-
+<main>
 <div class="panel">
-
-<h2>Programa</h2>
-
-<textarea id="source">LDA 10
-ADD 20
-SUB 5
-STOP</textarea>
-
+<label for="lang">Linguagem:</label>
+<select id="lang" onchange="loadExample()">
+<option value="asm">Assembly</option>
+<option value="c">C</option>
+<option value="bin">Binário</option>
+<option value="itsari">ITSARI</option>
+</select>
+<p class="status" id="hint"></p>
+<textarea id="source" spellcheck="false"></textarea>
 <br>
-
-<button onclick="assemble()">
-Montar programa
-</button>
-
-<button onclick="example()">
-Exemplo 10 + 20 - 5
-</button>
-
-<button onclick="clearAll()">
-Limpar
-</button>
-
-<div id="status"></div>
-
+<button onclick="compile()">COMPILAR</button>
+<button onclick="clearAll()">LIMPAR</button>
 </div>
 
-
-<!-- MEMÓRIA -->
+<div class="grid">
+<div class="panel">
+<h2>Assembly gerado</h2>
+<pre id="assembly">(compile para gerar)</pre>
+</div>
+<div class="panel">
+<h2>Binário</h2>
+<pre id="binary">(compile para gerar)</pre>
+</div>
+</div>
 
 <div class="panel">
+<h2>Memória JASCO-1</h2>
+<div id="memory"></div>
+</div>
 
-<h2>Memória da JASCO-1</h2>
+<div class="panel">
+<h2>Áudio / K7</h2>
+<p>Teste experimental: bit 0 = 1200 Hz, bit 1 = 2400 Hz, 100 ms por bit, com preâmbulo.</p>
+<button onclick="makeWav()">GERAR WAV</button>
+<button onclick="playWav()">▶ TOCAR</button>
+<button onclick="downloadWav()">BAIXAR WAV</button>
+<div id="audioBox"></div>
+</div>
 
+<div class="panel">
+<h2>ISA atual</h2>
 <table>
-
-<thead>
-
-<tr>
-<th>End.</th>
-<th>Binário</th>
-<th>Hex</th>
-<th>Conteúdo</th>
-</tr>
-
-</thead>
-
-<tbody id="memoryTable">
-
-</tbody>
-
+<tr><th>Opcode</th><th>Hex</th><th>Função</th></tr>
+<tr><td>10000000</td><td>80</td><td>NOP</td></tr>
+<tr><td>10000001</td><td>81</td><td>LDA</td></tr>
+<tr><td>10000010</td><td>82</td><td>ADD</td></tr>
+<tr><td>10000011</td><td>83</td><td>SUB</td></tr>
+<tr><td>11111111</td><td>FF</td><td>STOP</td></tr>
 </table>
-
 </div>
-
-
-<!-- BINÁRIO -->
-
-<div class="panel">
-
-<h2>Programa em binário</h2>
-
-<pre id="binary">
-Ainda não montado.
-</pre>
-
-<p>
-<b>Bytes utilizados:</b>
-
-<span id="byteCount">
-0
-</span>
-
-/
-8
-
-</p>
-
-</div>
-
-
-<!-- ÁUDIO -->
-
-<div class="panel">
-
-<h2>Gerador de áudio para K7</h2>
-
-<p class="small">
-
-Protótipo do sistema de carregamento por fita.
-
-<br>
-
-BIT 0 = 1200 Hz
-
-<br>
-
-BIT 1 = 2400 Hz
-
-<br>
-
-Cada bit possui duração configurável.
-
-</p>
-
-
-<label>
-
-Duração de cada bit (ms):
-
-<input
-id="bitMs"
-type="number"
-value="100"
-min="10"
-max="1000"
-step="10">
-
-</label>
-
-
-<br>
-
-
-<button onclick="generateWav()">
-Gerar WAV
-</button>
-
-
-<button onclick="playAudio()">
-▶ Reproduzir
-</button>
-
-
-<a
-id="download"
-style="display:none; margin-left:10px">
-
-Baixar WAV
-
-</a>
-
-
-<div id="audioArea"></div>
-
-</div>
-
-
-<!-- FORMATO FUTURO -->
-
-<div class="panel">
-
-<h2>Formato da fita</h2>
-
-<pre>
-SYNC
-
-HEADER
-
-TAMANHO DO PROGRAMA
-
-DADOS
-
-CHECKSUM
-
-END
-</pre>
-
-<p class="small">
-
-O protocolo acima ainda é experimental.
-Ele poderá ser definido posteriormente para o hardware real.
-
-</p>
-
-</div>
-
-
-</div>
-
+</main>
 
 <script>
-
-
-/* =====================================================
-   OPCODES DA JASCO-1
-===================================================== */
-
-const OPCODES = {
-
-    NOP: 0x80,
-
-    LDA: 0x81,
-
-    ADD: 0x82,
-
-    SUB: 0x83,
-
-    STOP: 0xFF
-
-};
-
-
-let programBytes = [];
-
-let audioURL = null;
-
-
-/* =====================================================
-   CONVERSÃO PARA BINÁRIO
-===================================================== */
-
-function byteBin(value) {
-
-    return value
-        .toString(2)
-        .padStart(8, "0");
-
-}
-
-
-/* =====================================================
-   CONVERSÃO DE NÚMERO
-===================================================== */
-
-function parseNumber(text) {
-
-    if (/^0x[0-9a-f]+$/i.test(text)) {
-
-        return parseInt(text, 16);
-
-    }
-
-
-    if (/^0b[01]+$/i.test(text)) {
-
-        return parseInt(text.substring(2), 2);
-
-    }
-
-
-    if (/^\d+$/.test(text)) {
-
-        return parseInt(text, 10);
-
-    }
-
-
-    return NaN;
-
-}
-
-
-/* =====================================================
-   MONTADOR
-===================================================== */
-
-function assemble() {
-
-    const source =
-        document.getElementById("source").value;
-
-
-    const lines =
-        source.split(/\r?\n/);
-
-
-    const bytes = [];
-
-    const errors = [];
-
-
-    lines.forEach((rawLine, index) => {
-
-        let line =
-            rawLine
-            .split(";")[0]
-            .trim();
-
-
-        if (!line) return;
-
-
-        const parts =
-            line
-            .replace(/,/g, " ")
-            .split(/\s+/);
-
-
-        const operation =
-            parts[0].toUpperCase();
-
-
-        /* ------------------------------------------
-           INSTRUÇÃO EXISTE?
-        ------------------------------------------ */
-
-        if (!(operation in OPCODES)) {
-
-            errors.push(
-                `Linha ${index + 1}: instrução desconhecida "${operation}"`
-            );
-
-            return;
-
-        }
-
-
-        /* ------------------------------------------
-           STOP / NOP
-        ------------------------------------------ */
-
-        if (
-            operation === "STOP" ||
-            operation === "NOP"
-        ) {
-
-            if (parts.length !== 1) {
-
-                errors.push(
-                    `Linha ${index + 1}: ${operation} não recebe argumento`
-                );
-
-                return;
-
-            }
-
-
-            bytes.push(
-                OPCODES[operation]
-            );
-
-            return;
-
-        }
-
-
-        /* ------------------------------------------
-           INSTRUÇÕES COM OPERANDO
-        ------------------------------------------ */
-
-        if (parts.length !== 2) {
-
-            errors.push(
-                `Linha ${index + 1}: ${operation} precisa de um valor`
-            );
-
-            return;
-
-        }
-
-
-        const number =
-            parseNumber(parts[1]);
-
-
-        /* ------------------------------------------
-           DADOS DA JASCO SÃO 0-127
-        ------------------------------------------ */
-
-        if (
-            !Number.isInteger(number) ||
-            number < 0 ||
-            number > 127
-        ) {
-
-            errors.push(
-                `Linha ${index + 1}: o dado deve estar entre 0 e 127`
-            );
-
-            return;
-
-        }
-
-
-        /* ------------------------------------------
-           INSTRUÇÃO + DADO
-        ------------------------------------------ */
-
-        bytes.push(
-            OPCODES[operation]
-        );
-
-
-        bytes.push(
-            number
-        );
-
-    });
-
-
-    programBytes = bytes;
-
-
-    /* =================================================
-       STATUS
-    ================================================= */
-
-    if (errors.length > 0) {
-
-        document.getElementById("status").innerHTML =
-
-            `<p class="error">
-            ${errors.join("<br>")}
-            </p>`;
-
-    }
-
-    else {
-
-        document.getElementById("status").innerHTML =
-
-            `<p class="success">
-            Programa montado com sucesso.
-            </p>`;
-
-    }
-
-
-    /* =================================================
-       ATUALIZA MEMÓRIA
-    ================================================= */
-
-    updateMemory();
-
-
-}
-
-
-/* =====================================================
-   MOSTRAR MEMÓRIA
-===================================================== */
-
-function updateMemory() {
-
-    const table =
-        document.getElementById("memoryTable");
-
-
-    table.innerHTML = "";
-
-
-    for (
-        let address = 0;
-        address < 8;
-        address++
-    ) {
-
-
-        const row =
-            document.createElement("tr");
-
-
-        /* ------------------------------------------
-           ENDEREÇO
-        ------------------------------------------ */
-
-        const addressCell =
-            document.createElement("td");
-
-
-        addressCell.textContent =
-            address;
-
-
-        row.appendChild(addressCell);
-
-
-        /* ------------------------------------------
-           BYTE
-        ------------------------------------------ */
-
-        const binaryCell =
-            document.createElement("td");
-
-
-        const hexCell =
-            document.createElement("td");
-
-
-        const contentCell =
-            document.createElement("td");
-
-
-        if (address < programBytes.length) {
-
-
-            const value =
-                programBytes[address];
-
-
-            binaryCell.textContent =
-                byteBin(value);
-
-
-            hexCell.textContent =
-                "0x" +
-                value
-                .toString(16)
-                .toUpperCase()
-                .padStart(2, "0");
-
-
-            /* --------------------------------------
-               IDENTIFICAR INSTRUÇÃO
-            -------------------------------------- */
-
-            let instruction = null;
-
-
-            for (const name in OPCODES) {
-
-                if (
-                    OPCODES[name] === value
-                ) {
-
-                    instruction = name;
-
-                    break;
-
-                }
-
-            }
-
-
-            if (instruction) {
-
-                contentCell.textContent =
-                    instruction;
-
-                contentCell.className =
-                    "instruction";
-
-            }
-
-            else {
-
-                contentCell.textContent =
-                    value;
-
-                contentCell.className =
-                    "data";
-
-            }
-
-
-        }
-
-        else {
-
-
-            binaryCell.textContent =
-                "--------";
-
-
-            hexCell.textContent =
-                "----";
-
-
-            contentCell.textContent =
-                "vazio";
-
-
-        }
-
-
-        row.appendChild(binaryCell);
-
-        row.appendChild(hexCell);
-
-        row.appendChild(contentCell);
-
-
-        table.appendChild(row);
-
-    }
-
-
-    /* =================================================
-       BINÁRIO COMPLETO
-    ================================================= */
-
-    if (programBytes.length > 0) {
-
-        document.getElementById("binary")
-            .textContent =
-
-            programBytes
-            .map(byteBin)
-            .join(" ");
-
-    }
-
-    else {
-
-        document.getElementById("binary")
-            .textContent =
-            "Ainda não há bytes.";
-
-    }
-
-
-    document.getElementById("byteCount")
-        .textContent =
-        programBytes.length;
-
-}
-
-
-/* =====================================================
-   EXEMPLO
-===================================================== */
-
-function example() {
-
-    document.getElementById("source").value =
-
-`LDA 10
+const examples={
+asm:`LDA 10
 ADD 20
 SUB 5
-STOP`;
+STOP`,
+c:`int main() {
+    int a = 10;
+    a = a + 20;
+    a = a - 5;
+}`,
+bin:`10000001
+00001010
+10000010
+00010100
+10000011
+00000101
+11111111`,
+itsari:`INICIO
+  A = 10
+  A + 20
+  A - 5
+FIM`};
 
+const hints={
+asm:"Assembly JASCO-1: LDA, ADD, SUB, NOP e STOP.",
+c:"C reduzido: por enquanto, inteiros, atribuição, + e -.",
+bin:"Digite bytes de 8 bits, um por linha, ou separados por espaços.",
+itsari:"ITSARI experimental: A = número, A + número, A - número, INICIO/FIM."};
 
-    assemble();
+let lastBytes=[];
+let wavBlob=null;
 
+function loadExample(){
+ const l=document.getElementById("lang").value;
+ document.getElementById("source").value=examples[l];
+ document.getElementById("hint").textContent=hints[l];
+}
+function err(msg){throw new Error(msg)}
+
+function parseNumber(s){
+ s=s.trim();
+ if(/^0b[01]+$/i.test(s)) return parseInt(s.slice(2),2);
+ if(/^0x[0-9a-f]+$/i.test(s)) return parseInt(s,16);
+ if(/^\d+$/.test(s)) return parseInt(s,10);
+ err("Número inválido: "+s);
 }
 
-
-/* =====================================================
-   LIMPAR
-===================================================== */
-
-function clearAll() {
-
-    document.getElementById("source").value = "";
-
-    programBytes = [];
-
-
-    document.getElementById("status")
-        .innerHTML = "";
-
-
-    updateMemory();
-
+function asmFromLines(text){
+ let out=[], lines=text.split(/\r?\n/);
+ for(let raw of lines){
+   let line=raw.split(";")[0].trim();
+   if(!line) continue;
+   let p=line.replace(/,/g," ").split(/\s+/);
+   let op=p[0].toUpperCase();
+   if(op==="NOP") out.push(["NOP",0x80]);
+   else if(op==="STOP") out.push(["STOP",0xFF]);
+   else if(["LDA","ADD","SUB"].includes(op)){
+      if(p.length!==2) err(op+" precisa de um operando.");
+      let n=parseNumber(p[1]);
+      if(n<0||n>255) err("Operando fora de 0..255.");
+      out.push([op,{"LDA":0x81,"ADD":0x82,"SUB":0x83}[op]]);
+      out.push(["→ "+n,n]);
+   } else err("Instrução desconhecida: "+op);
+ }
+ return out;
 }
 
-
-/* =====================================================
-   GERADOR DE WAV
-===================================================== */
-
-function makeWav(
-    samples,
-    sampleRate
-) {
-
-    const buffer =
-        new ArrayBuffer(
-            44 +
-            samples.length * 2
-        );
-
-
-    const view =
-        new DataView(buffer);
-
-
-    function writeString(
-        offset,
-        string
-    ) {
-
-        for (
-            let i = 0;
-            i < string.length;
-            i++
-        ) {
-
-            view.setUint8(
-                offset + i,
-                string.charCodeAt(i)
-            );
-
-        }
-
-    }
-
-
-    writeString(
-        0,
-        "RIFF"
-    );
-
-
-    view.setUint32(
-        4,
-        36 + samples.length * 2,
-        true
-    );
-
-
-    writeString(
-        8,
-        "WAVE"
-    );
-
-
-    writeString(
-        12,
-        "fmt "
-    );
-
-
-    view.setUint32(
-        16,
-        16,
-        true
-    );
-
-
-    view.setUint16(
-        20,
-        1,
-        true
-    );
-
-
-    view.setUint16(
-        22,
-        1,
-        true
-    );
-
-
-    view.setUint32(
-        24,
-        sampleRate,
-        true
-    );
-
-
-    view.setUint32(
-        28,
-        sampleRate * 2,
-        true
-    );
-
-
-    view.setUint16(
-        32,
-        2,
-        true
-    );
-
-
-    view.setUint16(
-        34,
-        16,
-        true
-    );
-
-
-    writeString(
-        36,
-        "data"
-    );
-
-
-    view.setUint32(
-        40,
-        samples.length * 2,
-        true
-    );
-
-
-    let position = 44;
-
-
-    for (const sample of samples) {
-
-        view.setInt16(
-            position,
-            Math.max(
-                -32768,
-                Math.min(
-                    32767,
-                    sample
-                )
-            ),
-            true
-        );
-
-
-        position += 2;
-
-    }
-
-
-    return new Blob(
-        [buffer],
-        {
-            type: "audio/wav"
-        }
-    );
-
+function cToAsm(text){
+ let t=text.replace(/\/\/.*$/gm,"");
+ let stmts=t.replace(/[{}]/g,"").split(";");
+ let asm=[], vars={};
+ for(let st of stmts){
+   st=st.trim();
+   if(!st) continue;
+   let m=st.match(/^(?:int\s+)?([A-Za-z_]\w*)\s*=\s*(-?\d+)$/);
+   if(m){vars[m[1]]=parseInt(m[2]); continue;}
+   m=st.match(/^([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*|-?\d+)\s*([+-])\s*([A-Za-z_]\w*|-?\d+)$/);
+   if(m){
+      let a=vars[m[2]]!==undefined?vars[m[2]]:parseNumber(m[2]);
+      let b=vars[m[4]]!==undefined?vars[m[4]]:parseNumber(m[4]);
+      asm.push(["LDA",0x81],["→ "+a,a],[m[3]==="+"?"ADD":"SUB",m[3]==="+"?0x82:0x83],["→ "+b,b]);
+      continue;
+   }
+   m=st.match(/^([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*([+-])\s*(\d+)$/);
+   if(m){
+      let a=vars[m[2]];
+      if(a===undefined) err("Variável não inicializada: "+m[2]);
+      let b=parseInt(m[4]);
+      asm.push(["LDA",0x81],["→ "+a,a],[m[3]==="+"?"ADD":"SUB",m[3]==="+"?0x82:0x83],["→ "+b,b]);
+      vars[m[1]]=null; continue;
+   }
+ }
+ if(!asm.length) err("Nenhuma operação C reconhecida.");
+ asm.push(["STOP",0xFF]);
+ return asm;
 }
 
-
-/* =====================================================
-   GERAR ÁUDIO
-===================================================== */
-
-function buildAudio() {
-
-    if (
-        programBytes.length === 0
-    ) {
-
-        assemble();
-
-    }
-
-
-    if (
-        programBytes.length === 0
-    ) {
-
-        return null;
-
-    }
-
-
-    const bitMs =
-        Math.max(
-            10,
-            Number(
-                document.getElementById("bitMs").value
-            ) || 100
-        );
-
-
-    const sampleRate =
-        44100;
-
-
-    const frequency0 =
-        1200;
-
-
-    const frequency1 =
-        2400;
-
-
-    const amplitude =
-        0.55;
-
-
-    const samples = [];
-
-
-    /* ------------------------------------------
-       PREÂMBULO
-
-       10101010101010101010
-    ------------------------------------------ */
-
-    const bits = [];
-
-
-    for (
-        let i = 0;
-        i < 20;
-        i++
-    ) {
-
-        bits.push(
-            i % 2
-        );
-
-    }
-
-
-    /* ------------------------------------------
-       TRANSFORMAR BYTES EM BITS
-    ------------------------------------------ */
-
-    for (
-        const byte of programBytes
-    ) {
-
-        for (
-            let bit = 7;
-            bit >= 0;
-            bit--
-        ) {
-
-            bits.push(
-                (byte >> bit) & 1
-            );
-
-        }
-
-    }
-
-
-    /* ------------------------------------------
-       GERAR ONDA
-    ------------------------------------------ */
-
-    for (
-        const bit of bits
-    ) {
-
-
-        const frequency =
-            bit
-            ? frequency1
-            : frequency0;
-
-
-        const numberOfSamples =
-            Math.round(
-                sampleRate *
-                bitMs /
-                1000
-            );
-
-
-        for (
-            let i = 0;
-            i < numberOfSamples;
-            i++
-        ) {
-
-
-            const time =
-                i / sampleRate;
-
-
-            /* ----------------------------------
-               ENVELOPE PARA EVITAR ESTALOS
-            ---------------------------------- */
-
-            let envelope = 1;
-
-
-            const edge =
-                Math.min(
-                    300,
-                    Math.floor(
-                        numberOfSamples / 8
-                    )
-                );
-
-
-            if (
-                i < edge
-            ) {
-
-                envelope =
-                    i / edge;
-
-            }
-
-
-            if (
-                i >
-                numberOfSamples - edge
-            ) {
-
-                envelope =
-                    (
-                        numberOfSamples - i
-                    ) / edge;
-
-            }
-
-
-            const sample =
-
-                32767 *
-                amplitude *
-                envelope *
-                Math.sin(
-                    2 *
-                    Math.PI *
-                    frequency *
-                    time
-                );
-
-
-            samples.push(sample);
-
-        }
-
-    }
-
-
-    return makeWav(
-        samples,
-        sampleRate
-    );
-
+function itsariToAsm(text){
+ let asm=[], lines=text.split(/\r?\n/);
+ for(let raw of lines){
+   let s=raw.trim().toUpperCase();
+   if(!s||s==="INICIO"||s==="FIM") continue;
+   let m=s.match(/^A\s*=\s*(\d+)$/);
+   if(m){asm.push(["LDA",0x81],["→ "+m[1],parseInt(m[1])]);continue;}
+   m=s.match(/^A\s*([+-])\s*(\d+)$/);
+   if(m){
+      let op=m[1]==="+"?"ADD":"SUB", code=m[1]==="+"?0x82:0x83;
+      asm.push([op,code],["→ "+m[2],parseInt(m[2])]);continue;
+   }
+   err("Comando ITSARI desconhecido: "+raw);
+ }
+ asm.push(["STOP",0xFF]);
+ return asm;
 }
 
-
-/* =====================================================
-   GERAR WAV
-===================================================== */
-
-function generateWav() {
-
-    const blob =
-        buildAudio();
-
-
-    if (!blob) {
-
-        return;
-
-    }
-
-
-    if (audioURL) {
-
-        URL.revokeObjectURL(
-            audioURL
-        );
-
-    }
-
-
-    audioURL =
-        URL.createObjectURL(
-            blob
-        );
-
-
-    const download =
-        document.getElementById(
-            "download"
-        );
-
-
-    download.href =
-        audioURL;
-
-
-    download.download =
-        "jasco_programa.wav";
-
-
-    download.textContent =
-        "💾 Baixar jasco_programa.wav";
-
-
-    download.style.display =
-        "inline-block";
-
-
-    document.getElementById(
-        "audioArea"
-    ).innerHTML =
-
-        `<audio controls src="${audioURL}"></audio>`;
-
-
-    document.getElementById(
-        "status"
-    ).innerHTML =
-
-        `<p class="success">
-        WAV gerado com sucesso.
-        </p>`;
-
+function bytesToAsm(bytes){
+ let out=[];
+ for(let i=0;i<bytes.length;i++){
+   let b=bytes[i];
+   if(b===0x80) out.push(["NOP",b]);
+   else if(b===0xFF) out.push(["STOP",b]);
+   else if(b===0x81||b===0x82||b===0x83){
+      out.push([[0x81,0x82,0x83][b-0x81]==0x81?"LDA":b===0x82?"ADD":"SUB",b]);
+      if(i+1<bytes.length){let n=bytes[++i];out.push(["→ "+n,n]);}
+      else err("Instrução sem operando.");
+   } else err("Opcode binário não reconhecido: "+b.toString(16));
+ }
+ return out;
 }
 
-
-/* =====================================================
-   REPRODUZIR
-===================================================== */
-
-function playAudio() {
-
-    if (!audioURL) {
-
-        generateWav();
-
-    }
-
-
-    if (audioURL) {
-
-        const audio =
-            new Audio(audioURL);
-
-
-        audio.play();
-
-    }
-
+function compile(){
+ try{
+   let lang=document.getElementById("lang").value, text=document.getElementById("source").value;
+   let rows, bytes=[];
+   if(lang==="asm") rows=asmFromLines(text);
+   else if(lang==="c") rows=cToAsm(text);
+   else if(lang==="itsari") rows=itsariToAsm(text);
+   else{
+      let toks=text.trim().split(/[\s,]+/).filter(Boolean);
+      bytes=toks.map(parseNumber);
+      if(bytes.some(b=>b<0||b>255)) err("Todos os bytes precisam estar entre 0 e 255.");
+      rows=bytesToAsm(bytes);
+   }
+   if(!bytes.length) bytes=rows.map(x=>x[1]);
+   if(bytes.length>8) err("A memória base do JASCO-1 tem 8 bytes.");
+   lastBytes=bytes;
+   document.getElementById("assembly").textContent=rows.map(x=>x[0]).join("\n");
+   document.getElementById("binary").textContent=bytes.map(b=>b.toString(2).padStart(8,"0")).join("\n");
+   renderMemory(bytes);
+   document.getElementById("audioBox").innerHTML="";
+   wavBlob=null;
+ }catch(e){
+   document.getElementById("assembly").innerHTML='<span class="error">'+e.message+'</span>';
+   document.getElementById("binary").textContent="";
+   document.getElementById("memory").innerHTML="";
+ }
 }
 
+function renderMemory(bytes){
+ let html="<table><tr><th>Endereço</th><th>Binário</th><th>Hex</th><th>Conteúdo</th></tr>";
+ const names={128:"NOP",129:"LDA",130:"ADD",131:"SUB",255:"STOP"};
+ for(let i=0;i<8;i++){
+   let b=bytes[i];
+   let content=b===undefined?"<span class='muted'>vazio</span>":(names[b]||"→ "+b);
+   html+=`<tr><td>${i}</td><td>${b===undefined?"":b.toString(2).padStart(8,"0")}</td><td>${b===undefined?"":b.toString(16).padStart(2,"0").toUpperCase()}</td><td>${content}</td></tr>`;
+ }
+ html+="</table>";
+ document.getElementById("memory").innerHTML=html;
+}
 
-/* =====================================================
-   INICIAR
-===================================================== */
-
-assemble();
-
-
+function makeWav(){
+ if(!lastBytes.length){alert("Compile um programa primeiro.");return;}
+ const sampleRate=44100, bitMs=100, amp=0.45, pre=Array(20).fill(0).map((_,i)=>i%2), bits=[];
+ pre.forEach(b=>bits.push(b));
+ lastBytes.forEach(v=>{for(let i=7;i>=0;i--)bits.push((v>>i)&1)});
+ let samples=[];
+ for(let b of bits){
+   let freq=b?2400:1200, n=Math.floor(sampleRate*bitMs/1000);
+   for(let i=0;i<n;i++) samples.push(Math.round(32767*amp*Math.sin(2*Math.PI*freq*i/sampleRate)));
+ }
+ const buf=new ArrayBuffer(44+samples.length*2), dv=new DataView(buf);
+ function ws(o,s){for(let i=0;i<s.length;i++)dv.setUint8(o+i,s.charCodeAt(i))}
+ ws(0,"RIFF");dv.setUint32(4,36+samples.length*2,true);ws(8,"WAVE");ws(12,"fmt ");
+ dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);
+ dv.setUint32(24,sampleRate,true);dv.setUint32(28,sampleRate*2,true);dv.setUint16(32,2,true);dv.setUint16(34,16,true);
+ ws(36,"data");dv.setUint32(40,samples.length*2,true);
+ samples.forEach((s,i)=>dv.setInt16(44+i*2,s,true));
+ wavBlob=new Blob([buf],{type:"audio/wav"});
+ document.getElementById("audioBox").innerHTML='<audio id="player" controls></audio>';
+ document.getElementById("player").src=URL.createObjectURL(wavBlob);
+}
+function playWav(){if(!wavBlob)makeWav();setTimeout(()=>document.getElementById("player")?.play(),50)}
+function downloadWav(){
+ if(!wavBlob)makeWav();
+ setTimeout(()=>{
+   let a=document.createElement("a");a.href=URL.createObjectURL(wavBlob);a.download="JASCO-1_program.wav";a.click();
+ },50);
+}
+function clearAll(){
+ document.getElementById("source").value="";
+ document.getElementById("assembly").textContent="";
+ document.getElementById("binary").textContent="";
+ document.getElementById("memory").innerHTML="";
+ document.getElementById("audioBox").innerHTML="";
+ lastBytes=[];wavBlob=null;
+}
+loadExample();
 </script>
-
 </body>
 </html>
-```
